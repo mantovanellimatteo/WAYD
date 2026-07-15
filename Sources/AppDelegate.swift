@@ -124,6 +124,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         freqSubmenuItem.submenu = freqMenu
         menu.addItem(freqSubmenuItem)
         
+        let startupItem = NSMenuItem(title: "Avvia all'avvio...", action: #selector(launchAtStartupClicked), keyEquivalent: "")
+        startupItem.target = self
+        menu.addItem(startupItem)
+        
         menu.addItem(NSMenuItem.separator())
         
         let aboutItem = NSMenuItem(title: "Info su WAYD", action: #selector(aboutClicked), keyEquivalent: "")
@@ -143,6 +147,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     @objc func correctLastClicked() {
         showPromptWindow(isCorrection: true)
+    }
+    
+    @objc func launchAtStartupClicked() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension") {
+            NSWorkspace.shared.open(url)
+        }
     }
     
     @objc func viewLogClicked() {
