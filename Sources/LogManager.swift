@@ -67,7 +67,14 @@ class LogManager {
     
     // Read all entries
     func loadEntries() -> [LogEntry] {
-        guard let content = try? String(contentsOf: logFileURL, encoding: .utf8) else {
+        var content = ""
+        if let utf8Content = try? String(contentsOf: logFileURL, encoding: .utf8) {
+            content = utf8Content
+        } else if let latin1Content = try? String(contentsOf: logFileURL, encoding: .isoLatin1) {
+            content = latin1Content
+        } else if let macOSRomanContent = try? String(contentsOf: logFileURL, encoding: .macOSRoman) {
+            content = macOSRomanContent
+        } else {
             return []
         }
         

@@ -18,11 +18,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Create Status Item
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         
-        if let button = statusItem.button {
-            if let image = NSImage(systemSymbolName: "clock", accessibilityDescription: "WAYD") {
-                image.isTemplate = true
-                button.image = image
-            }
+        if statusItem.button != nil {
+            updateStatusBarImage()
             updateStatusBarTitle()
         }
         
@@ -57,6 +54,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             button.title = " " + trimmed
         } else {
             button.title = ""
+        }
+    }
+    
+    func updateStatusBarImage() {
+        guard let button = statusItem.button else { return }
+        let symbolName = promptEnabled ? "clock" : "clock.slash"
+        if let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "WAYD") {
+            image.isTemplate = true
+            button.image = image
         }
     }
     
@@ -131,6 +137,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func togglePromptClicked() {
         promptEnabled.toggle()
         buildMenu()
+        updateStatusBarImage()
         if promptEnabled {
             startTimer()
         } else {
