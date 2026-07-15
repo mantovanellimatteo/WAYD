@@ -184,14 +184,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let contentView = PromptView(
             onSave: { [weak self] text in
                 LogManager.shared.logActivity(text)
-                self?.promptWindow?.close()
-                self?.promptWindow = nil
-                self?.updateStatusBarTitle()
-                self?.buildMenu()
+                DispatchQueue.main.async {
+                    self?.promptWindow?.close()
+                    self?.promptWindow = nil
+                    self?.updateStatusBarTitle()
+                    self?.buildMenu()
+                }
             },
             onCancel: { [weak self] in
-                self?.promptWindow?.close()
-                self?.promptWindow = nil
+                DispatchQueue.main.async {
+                    self?.promptWindow?.close()
+                    self?.promptWindow = nil
+                }
             }
         )
         

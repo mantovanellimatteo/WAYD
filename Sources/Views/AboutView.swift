@@ -29,7 +29,9 @@ struct AboutView: View {
                 .foregroundColor(.secondary)
             
             Button("Chiudi") {
-                NSApp.keyWindow?.close()
+                DispatchQueue.main.async {
+                    NSApp.keyWindow?.close()
+                }
             }
             .buttonStyle(.bordered)
         }
