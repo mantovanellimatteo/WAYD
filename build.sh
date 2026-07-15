@@ -25,9 +25,12 @@ echo "📂 Creating App Bundle structure..."
 mkdir -p "${MACOS_DIR}"
 mkdir -p "${RESOURCES_DIR}"
 
-# Copy Info.plist
-echo "📄 Copying Info.plist..."
+# Copy Info.plist and Resources
+echo "📄 Copying Info.plist and Resources..."
 cp Resources/Info.plist "${CONTENTS_DIR}/Info.plist"
+if [ -f "Resources/AppIcon.icns" ]; then
+    cp Resources/AppIcon.icns "${RESOURCES_DIR}/AppIcon.icns"
+fi
 
 # List of source files
 SOURCES=(
