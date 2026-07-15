@@ -63,7 +63,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "WAYD") {
             image.isTemplate = true
             button.image = image
+        } else if let image = NSImage(systemSymbolName: "clock", accessibilityDescription: "WAYD") {
+            image.isTemplate = true
+            button.image = image
         }
+        
+        // Gray out the menu bar item when disabled to make it visually obvious
+        button.alphaValue = promptEnabled ? 1.0 : 0.4
     }
     
     func buildMenu() {

@@ -67,24 +67,45 @@ class LogManager {
     
     // Read all entries
     func loadEntries() -> [LogEntry] {
-        var content = ""
-        if let utf8Content = try? String(contentsOf: logFileURL, encoding: .utf8) {
-            content = utf8Content
-        } else if let latin1Content = try? String(contentsOf: logFileURL, encoding: .isoLatin1) {
-            content = latin1Content
-        } else if let macOSRomanContent = try? String(contentsOf: logFileURL, encoding: .macOSRoman) {
-            content = macOSRomanContent
-        } else {
+        guard let data = try? Data(contentsOf: logFileURL) else {
             return []
         }
         
         var entries: [LogEntry] = []
-        let lines = content.components(separatedBy: .newlines)
-        for line in lines {
-            if let entry = parseLine(line) {
+        
+        // Split data by line endings (0x0A = \n, 0x0D = \r)
+        var lineStart = data.startIndex
+        while lineStart < data.endIndex {
+            var lineEnd = lineStart
+            while lineEnd < data.endIndex && data[lineEnd] != 0x0A && data[lineEnd] != 0x0D {
+                lineEnd += 1
+            }
+            
+            let lineData = data[lineStart..<lineEnd]
+            
+            // Decode each line individually with fallbacks
+            var lineString = ""
+            if let utf8Str = String(data: lineData, encoding: .utf8) {
+                lineString = utf8Str
+            } else if let latin1Str = String(data: lineData, encoding: .isoLatin1) {
+                lineString = latin1Str
+            } else if let macOSRomanStr = String(data: lineData, encoding: .macOSRoman) {
+                lineString = macOSRomanStr
+            } else {
+                lineString = String(decoding: lineData, as: UTF8.self)
+            }
+            
+            if let entry = parseLine(lineString) {
                 entries.append(entry)
             }
+            
+            // Advance past newlines
+            lineStart = lineEnd
+            while lineStart < data.endIndex && (data[lineStart] == 0x0A || data[lineStart] == 0x0D) {
+                lineStart += 1
+            }
         }
+        
         return entries
     }
     
