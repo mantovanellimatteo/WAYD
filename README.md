@@ -6,6 +6,19 @@ L'applicazione salva tutto lo storico delle tue risposte in un semplice file CSV
 
 ---
 
+## 📸 Schermate
+
+<p align="center">
+  <img src="Screenshot/Screenshot%202026-07-15%20alle%2022.18.58.png" width="400" alt="Prompt Inserimento"/>
+  <img src="Screenshot/Screenshot%202026-07-15%20alle%2022.19.24.png" width="400" alt="Menu Barra di Stato"/>
+</p>
+<p align="center">
+  <img src="Screenshot/Screenshot%202026-07-15%20alle%2022.21.23.png" width="400" alt="Visualizzatore Log con Filtri"/>
+  <img src="Screenshot/Screenshot%202026-07-15%20alle%2022.19.54.png" width="400" alt="Informazioni App"/>
+</p>
+
+---
+
 ## 🌟 Funzionalità
 
 * **Icona e Info nella Barra dei Menu**: Mostra l'icona di un orologio e l'ultimo log inserito direttamente nella barra in alto.
