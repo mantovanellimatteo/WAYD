@@ -183,18 +183,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         let contentView = PromptView(
             onSave: { [weak self] text in
+                print("[WAYD DEBUG] onSave closure triggered. Logging activity...")
                 LogManager.shared.logActivity(text)
+                print("[WAYD DEBUG] Activity logged. Scheduling window close on main queue...")
                 DispatchQueue.main.async {
-                    self?.promptWindow?.close()
-                    self?.promptWindow = nil
-                    self?.updateStatusBarTitle()
-                    self?.buildMenu()
+                    print("[WAYD DEBUG] Async close block started.")
+                    guard let self = self else {
+                        print("[WAYD DEBUG] Self is nil in async block!")
+                        return
+                    }
+                    print("[WAYD DEBUG] Closing prompt window...")
+                    self.promptWindow?.close()
+                    print("[WAYD DEBUG] Setting prompt window reference to nil...")
+                    self.promptWindow = nil
+                    print("[WAYD DEBUG] Updating status bar title...")
+                    self.updateStatusBarTitle()
+                    print("[WAYD DEBUG] Rebuilding menu...")
+                    self.buildMenu()
+                    print("[WAYD DEBUG] Rebuilt menu complete.")
                 }
             },
             onCancel: { [weak self] in
+                print("[WAYD DEBUG] onCancel closure triggered. Scheduling window close...")
                 DispatchQueue.main.async {
-                    self?.promptWindow?.close()
-                    self?.promptWindow = nil
+                    guard let self = self else { return }
+                    self.promptWindow?.close()
+                    self.promptWindow = nil
                 }
             }
         )

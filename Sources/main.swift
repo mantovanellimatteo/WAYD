@@ -1,9 +1,10 @@
 import Cocoa
 
+// Global strong reference to keep the AppDelegate alive for the life of the app
+var appDelegate: AppDelegate?
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
+appDelegate = delegate
 app.delegate = delegate
-
-withExtendedLifetime(delegate) {
-    app.run()
-}
+app.run()
