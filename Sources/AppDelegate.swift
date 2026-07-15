@@ -226,6 +226,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.contentView = NSHostingView(rootView: contentView)
         window.isMovableByWindowBackground = true
         window.level = .floating // Keep it on top of other app windows
+        window.isReleasedWhenClosed = false
         
         // Handle window manual close by clicking 'x'
         NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: nil) { [weak self] _ in
@@ -256,6 +257,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.title = "Registro Attività (WAYD)"
         window.contentView = NSHostingView(rootView: contentView)
         window.isMovableByWindowBackground = true
+        window.isReleasedWhenClosed = false
         
         NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: nil) { [weak self] _ in
             self?.historyWindow = nil
@@ -284,6 +286,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.center()
         window.title = "Informazioni"
         window.contentView = NSHostingView(rootView: contentView)
+        window.isReleasedWhenClosed = false
         
         NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: nil) { [weak self] _ in
             self?.aboutWindow = nil
