@@ -11,7 +11,7 @@ struct AboutView: View {
                 Text("WAYD")
                     .font(.system(.title2, design: .rounded))
                     .fontWeight(.bold)
-                Text("Versione 1.0.0")
+                Text("Versione 1.3")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -24,7 +24,7 @@ struct AboutView: View {
             
             Divider()
             
-            Text("Sviluppato con ❤️ per macOS")
+            Text("Developed by Matteo Mantovanelli - Smeup ICS srl")
                 .font(.caption)
                 .foregroundColor(.secondary)
             
