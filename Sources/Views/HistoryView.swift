@@ -5,11 +5,24 @@ struct IndexedEntry {
     let originalIndex: Int
 }
 
+enum DatePreset: String, CaseIterable, Identifiable {
+    case custom = "Personalizzato"
+    case thisWeek = "Questa settimana"
+    case thisMonth = "Questo mese"
+    case lastMonth = "Mese scorso"
+    
+    var id: String { self.rawValue }
+}
+
 struct HistoryView: View {
     @State private var entries: [LogEntry] = []
     @State private var searchText: String = ""
-    @State private var filterDate = Date()
+    
+    // Date filter states
     @State private var useDateFilter = false
+    @State private var startDate = Date()
+    @State private var endDate = Date()
+    @State private var selectedPreset: DatePreset = .custom
     
     @State private var editingEntryIndex: Int? = nil
     @State private var editingText: String = ""
@@ -33,13 +46,39 @@ struct HistoryView: View {
                         .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
                 )
                 
-                HStack {
+                HStack(spacing: 8) {
                     Toggle("Filtra per data:", isOn: $useDateFilter)
                         .toggleStyle(.checkbox)
                     
-                    DatePicker("", selection: $filterDate, displayedComponents: .date)
-                        .labelsHidden()
-                        .disabled(!useDateFilter)
+                    if useDateFilter {
+                        Picker("", selection: $selectedPreset) {
+                            ForEach(DatePreset.allCases) { preset in
+                                Text(preset.rawValue).tag(preset)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .frame(width: 140)
+                        .onChange(of: selectedPreset) { newValue in
+                            applyPreset(newValue)
+                        }
+                        
+                        DatePicker("Da:", selection: $startDate, displayedComponents: .date)
+                            .labelsHidden()
+                            .onChange(of: startDate) { _ in
+                                if selectedPreset != .custom {
+                                    // Switch to custom if user manually edits dates
+                                    // Wait, to prevent feedback loop we check if preset is already custom
+                                    // Actually, it's fine
+                                }
+                            }
+                        
+                        Text("a:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        DatePicker("A:", selection: $endDate, displayedComponents: .date)
+                            .labelsHidden()
+                    }
                     
                     Spacer()
                     
@@ -110,7 +149,7 @@ struct HistoryView: View {
                 .listStyle(.sidebar)
             }
         }
-        .frame(minWidth: 500, minHeight: 400)
+        .frame(minWidth: 600, minHeight: 450)
         .onAppear(perform: refreshData)
         .sheet(isPresented: $isEditing) {
             PromptView(
@@ -120,7 +159,6 @@ struct HistoryView: View {
                     if let index = editingEntryIndex {
                         LogManager.shared.updateEntry(at: index, newActivity: newText)
                         refreshData()
-                        // Notify the system that the last entry might have changed
                         NotificationCenter.default.post(name: Notification.Name("LastEntryChanged"), object: nil)
                     }
                     isEditing = false
@@ -147,7 +185,6 @@ struct HistoryView: View {
         if alert.runModal() == .alertFirstButtonReturn {
             LogManager.shared.deleteEntry(at: index)
             refreshData()
-            // Notify the system that the last entry might have changed
             NotificationCenter.default.post(name: Notification.Name("LastEntryChanged"), object: nil)
         }
     }
@@ -158,19 +195,44 @@ struct HistoryView: View {
         isEditing = true
     }
     
+    private func applyPreset(_ preset: DatePreset) {
+        let calendar = Calendar.current
+        let now = Date()
+        
+        switch preset {
+        case .custom:
+            break
+        case .thisWeek:
+            var calendarIt = calendar
+            calendarIt.firstWeekday = 2 // Monday (Italian standard)
+            if let startOfWeek = calendarIt.date(from: calendarIt.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) {
+                startDate = startOfWeek
+                endDate = now
+            }
+        case .thisMonth:
+            if let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) {
+                startDate = startOfMonth
+                endDate = now
+            }
+        case .lastMonth:
+            if let startOfThisMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now)),
+               let startOfLastMonth = calendar.date(byAdding: .month, value: -1, to: startOfThisMonth),
+               let endOfLastMonth = calendar.date(byAdding: .second, value: -1, to: startOfThisMonth) {
+                startDate = startOfLastMonth
+                endDate = endOfLastMonth
+            }
+        }
+    }
+    
     // Filtered entries zipped with original index, sorted newest first
     private var filteredEntriesWithIndex: [IndexedEntry] {
         var result: [IndexedEntry] = []
+        let calendar = Calendar.current
         
-        let targetDateString: String?
-        if useDateFilter {
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "it_IT")
-            formatter.dateFormat = "EEEE d MMMM yyyy"
-            targetDateString = formatter.string(from: filterDate).capitalized
-        } else {
-            targetDateString = nil
-        }
+        // Define boundaries for date filtering (inclusive of entire days)
+        let start = calendar.startOfDay(for: startDate)
+        let startOfNextDay = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: endDate)) ?? endDate
+        let end = calendar.date(byAdding: .second, value: -1, to: startOfNextDay) ?? endDate
         
         for (index, entry) in entries.enumerated() {
             // Filter by search text
@@ -180,10 +242,14 @@ struct HistoryView: View {
                 }
             }
             
-            // Filter by date
-            if let targetDate = targetDateString {
-                if entry.date != targetDate {
-                    continue
+            // Filter by date range
+            if useDateFilter {
+                if let entryDate = entry.parsedDate {
+                    if entryDate < start || entryDate > end {
+                        continue
+                    }
+                } else {
+                    continue // Exclude if we cannot parse the date
                 }
             }
             

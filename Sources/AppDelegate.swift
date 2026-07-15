@@ -35,7 +35,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Prompt immediately on launch after a small delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
             if self?.promptEnabled == true {
-                self?.showPromptWindow()
+                self?.showPromptWindow(isCorrection: false)
             }
         }
     }
@@ -87,6 +87,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         newEntryItem.target = self
         menu.addItem(newEntryItem)
         
+        let correctLastItem = NSMenuItem(title: "Modifica ultima voce...", action: #selector(correctLastClicked), keyEquivalent: "e")
+        correctLastItem.target = self
+        correctLastItem.isEnabled = !lastEntry.isEmpty
+        menu.addItem(correctLastItem)
+        
         let viewLogItem = NSMenuItem(title: "Visualizza registro log...", action: #selector(viewLogClicked), keyEquivalent: "l")
         viewLogItem.target = self
         menu.addItem(viewLogItem)
@@ -133,7 +138,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     @objc func newEntryClicked() {
-        showPromptWindow()
+        showPromptWindow(isCorrection: false)
+    }
+    
+    @objc func correctLastClicked() {
+        showPromptWindow(isCorrection: true)
     }
     
     @objc func viewLogClicked() {
@@ -174,7 +183,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         stopTimer()
         timer = Timer.scheduledTimer(withTimeInterval: promptInterval, repeats: true) { [weak self] _ in
             if self?.promptEnabled == true {
-                self?.showPromptWindow()
+                self?.showPromptWindow(isCorrection: false)
             }
         }
     }
@@ -185,7 +194,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     // Windows Management
-    func showPromptWindow() {
+    func showPromptWindow(isCorrection: Bool = false) {
         // Force the app to take focus, bringing the popup to the front
         NSApp.activate(ignoringOtherApps: true)
         
@@ -194,10 +203,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         
+        let title = isCorrection ? "Modifica ultima attività:" : "Cosa stai facendo?"
+        let initialText = isCorrection ? LogManager.shared.getLastEntry() : ""
+        
         let contentView = PromptView(
+            title: title,
+            initialText: initialText,
             onSave: { [weak self] text in
-                print("[WAYD DEBUG] onSave closure triggered. Logging activity...")
-                LogManager.shared.logActivity(text)
+                print("[WAYD DEBUG] onSave closure triggered. Logging/Correcting activity...")
+                if isCorrection {
+                    LogManager.shared.correctLastEntry(newActivity: text)
+                } else {
+                    LogManager.shared.logActivity(text)
+                }
                 print("[WAYD DEBUG] Activity logged. Scheduling window close on main queue...")
                 DispatchQueue.main.async {
                     print("[WAYD DEBUG] Async close block started.")

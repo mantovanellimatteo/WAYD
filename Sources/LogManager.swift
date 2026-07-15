@@ -17,6 +17,15 @@ struct LogEntry: Identifiable, Hashable, Codable {
         let escapedActivity = activity.replacingOccurrences(of: "\"", with: "\"\"")
         return "\(date),\(time),\"\(escapedActivity)\"\n"
     }
+    
+    var parsedDate: Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "it_IT")
+        formatter.dateFormat = "EEEE d MMMM yyyy HH:mm:ss"
+        // Lowercase to ensure compatibility across locales and manual scripts
+        let dateString = "\(date) \(time)".lowercased()
+        return formatter.date(from: dateString)
+    }
 }
 
 class LogManager {
