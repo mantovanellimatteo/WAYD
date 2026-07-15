@@ -19,7 +19,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "clock", accessibilityDescription: "WAYD")
+            if let image = NSImage(systemSymbolName: "clock", accessibilityDescription: "WAYD") {
+                image.isTemplate = true
+                button.image = image
+            }
             updateStatusBarTitle()
         }
         
