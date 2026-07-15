@@ -1,0 +1,9 @@
+# macOS files
+.DS_Store
+
+# Build products
+WAYD.app/
+
+# User state / logs (just in case they are copied here, though they live in ~/)
+*_log.csv
+.last_entry.txt
