@@ -1,8 +1,105 @@
 import SwiftUI
+import AppKit
+
+struct AutocompleteTextField: NSViewRepresentable {
+    @Binding var text: String
+    @Binding var selectedIndex: Int?
+    var placeholder: String
+    var onCommit: () -> Void
+    var suggestions: [String]
+    var onMoveDown: () -> Void
+    var onMoveUp: () -> Void
+    
+    class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: AutocompleteTextField
+        var isCompleting = false
+        var isDeleting = false
+        
+        init(_ parent: AutocompleteTextField) {
+            self.parent = parent
+        }
+        
+        func controlTextDidChange(_ obj: Notification) {
+            guard let textField = obj.object as? NSTextField else { return }
+            let currentText = textField.stringValue
+            
+            parent.text = currentText
+            
+            // Reset selection because the user is typing manually
+            parent.selectedIndex = nil
+            
+            if isDeleting {
+                isDeleting = false
+                return
+            }
+            
+            guard let editor = textField.currentEditor() else { return }
+            let selection = editor.selectedRange
+            let isAtEnd = selection.location == currentText.count
+            
+            if isAtEnd && !isCompleting {
+                let typed = currentText
+                // Find matching prefix in suggestions
+                if let match = parent.suggestions.first(where: { 
+                    $0.lowercased().hasPrefix(typed.lowercased()) && $0.count > typed.count 
+                }) {
+                    isCompleting = true
+                    textField.stringValue = match
+                    parent.text = match
+                    
+                    // Select the autocompleted part
+                    let completedRange = NSRange(location: typed.count, length: match.count - typed.count)
+                    editor.selectedRange = completedRange
+                    isCompleting = false
+                }
+            }
+        }
+        
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            if commandSelector == #selector(NSResponder.deleteBackward(_:)) ||
+               commandSelector == #selector(NSResponder.deleteForward(_:)) {
+                isDeleting = true
+            } else if commandSelector == #selector(NSResponder.moveDown(_:)) {
+                parent.onMoveDown()
+                return true // Handled: don't move cursor
+            } else if commandSelector == #selector(NSResponder.moveUp(_:)) {
+                parent.onMoveUp()
+                return true // Handled: don't move cursor
+            }
+            return false
+        }
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    func makeNSView(context: Context) -> NSTextField {
+        let textField = NSTextField()
+        textField.placeholderString = placeholder
+        textField.delegate = context.coordinator
+        textField.isBezeled = false
+        textField.drawsBackground = false
+        textField.focusRingType = .none
+        textField.font = .systemFont(ofSize: NSFont.systemFontSize)
+        
+        // Trigger focus
+        DispatchQueue.main.async {
+            textField.window?.makeFirstResponder(textField)
+        }
+        
+        return textField
+    }
+    
+    func updateNSView(_ nsView: NSTextField, context: Context) {
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+    }
+}
 
 struct PromptView: View {
     @State private var activityText: String
-    @FocusState private var isTextFieldFocused: Bool
     @State private var pastActivities: [String] = []
     
     // Autocomplete selection state
@@ -28,23 +125,30 @@ struct PromptView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             
             VStack(alignment: .leading, spacing: 6) {
-                TextField("Sto lavorando a...", text: $activityText)
-                    .textFieldStyle(.plain)
-                    .padding(10)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .cornerRadius(6)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.accentColor.opacity(isTextFieldFocused ? 0.8 : 0.2), lineWidth: 1.5)
-                    )
-                    .focused($isTextFieldFocused)
-                    .onSubmit {
+                // Using our native AppKit text field with autocomplete
+                AutocompleteTextField(
+                    text: $activityText,
+                    selectedIndex: $selectedSuggestionIndex,
+                    placeholder: "Sto lavorando a...",
+                    onCommit: {
                         saveAndClose()
+                    },
+                    suggestions: pastActivities,
+                    onMoveDown: {
+                        selectNextSuggestion()
+                    },
+                    onMoveUp: {
+                        selectPreviousSuggestion()
                     }
-                    .onChange(of: activityText) { _ in
-                        // Reset selection when user types or edits text
-                        selectedSuggestionIndex = nil
-                    }
+                )
+                .frame(height: 22)
+                .padding(10)
+                .background(Color(NSColor.controlBackgroundColor))
+                .cornerRadius(6)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.accentColor.opacity(0.3), lineWidth: 1.5)
+                )
                 
                 // Dynamic autocomplete suggestions
                 if !suggestions.isEmpty {
@@ -79,25 +183,6 @@ struct PromptView: View {
                 }
             }
             
-            // Hidden buttons to capture Arrow Up/Down keyboard events
-            if !suggestions.isEmpty {
-                Button("") {
-                    selectNextSuggestion()
-                }
-                .keyboardShortcut(.downArrow, modifiers: [])
-                .buttonStyle(.plain)
-                .frame(width: 0, height: 0)
-                .opacity(0)
-                
-                Button("") {
-                    selectPreviousSuggestion()
-                }
-                .keyboardShortcut(.upArrow, modifiers: [])
-                .buttonStyle(.plain)
-                .frame(width: 0, height: 0)
-                .opacity(0)
-            }
-            
             Spacer(minLength: 8)
             
             HStack(spacing: 12) {
@@ -123,11 +208,6 @@ struct PromptView: View {
             let loaded = LogManager.shared.loadEntries()
             let uniqueActivities = Array(Set(loaded.map { $0.activity })).sorted()
             pastActivities = uniqueActivities
-            
-            // Focus text field
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                isTextFieldFocused = true
-            }
         }
     }
     
@@ -137,6 +217,7 @@ struct PromptView: View {
         
         return pastActivities.filter { activity in
             let actLower = activity.lowercased()
+            // Make sure it doesn't match the exact text, otherwise no suggestion needed
             return actLower.hasPrefix(trimmed) && actLower != trimmed
         }
         .prefix(3)
@@ -145,22 +226,31 @@ struct PromptView: View {
     
     private func selectNextSuggestion() {
         guard !suggestions.isEmpty else { return }
+        let nextIndex: Int
         if let current = selectedSuggestionIndex {
             if current < suggestions.count - 1 {
-                selectedSuggestionIndex = current + 1
+                nextIndex = current + 1
+            } else {
+                nextIndex = current
             }
         } else {
-            selectedSuggestionIndex = 0
+            nextIndex = 0
         }
+        selectedSuggestionIndex = nextIndex
+        activityText = suggestions[nextIndex]
     }
     
     private func selectPreviousSuggestion() {
         guard !suggestions.isEmpty else { return }
         if let current = selectedSuggestionIndex {
             if current > 0 {
-                selectedSuggestionIndex = current - 1
+                let prevIndex = current - 1
+                selectedSuggestionIndex = prevIndex
+                activityText = suggestions[prevIndex]
             } else {
                 selectedSuggestionIndex = nil
+                // Optionally reset to what the user typed before?
+                // But keeping current is fine.
             }
         }
     }
@@ -171,10 +261,9 @@ struct PromptView: View {
         var finalActivity = trimmed
         if !suggestions.isEmpty {
             if let index = selectedSuggestionIndex, index >= 0 && index < suggestions.count {
-                // If a suggestion was explicitly selected via arrow keys
                 finalActivity = suggestions[index]
             } else if selectedSuggestionIndex == nil {
-                // Default: automatically take the first suggestion on submit if none is selected
+                // If there's an exact suggestion matching prefix, let's use it
                 finalActivity = suggestions[0]
             }
         }
