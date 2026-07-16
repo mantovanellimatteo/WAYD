@@ -22,14 +22,18 @@ L'applicazione salva tutto lo storico delle tue risposte in un semplice file CSV
 
 * **Icona e Info nella Barra dei Menu**: Mostra l'icona di un orologio e l'ultimo log inserito direttamente nella barra in alto.
 * **Prompt di Inserimento Nativo**: Una finestra popup SwiftUI pulita ed elegante che appare in primo piano per chiederti cosa stai facendo.
+  * **Autocompletamento in linea (Type-Ahead)**: Man mano che scrivi nel campo, l'app autocompleta il testo suggerendo l'attività passata più rilevante ed evidenziando la parte completata.
+  * **Navigazione da tastiera avanzata**: Scorri i suggerimenti visualizzati sotto il campo usando le frecce ⬆️/⬇️ con evidenziazione visiva azzurra. Premendo `Invio`, l'app auto-completa e salva direttamente il primo suggerimento (o quello correntemente selezionato).
 * **Registro Log Completo**:
   * Visualizzazione di tutta la cronologia.
   * **Ricerca libera** (filtro testuale case-insensitive).
-  * **Filtro per data** preciso.
+  * **Filtro per data ad intervallo**: Possibilità di filtrare i log inserendo un range preciso di date o selezionando preset rapidi ("Questa settimana", "Questo mese", "Mese scorso").
   * Possibilità di **modificare** o **eliminare** qualsiasi attività passata direttamente dall'interfaccia.
 * **Configurazione e Timer**:
   * Possibilità di attivare/disattivare il prompt in qualsiasi momento dal menu.
   * Regolazione della frequenza del prompt (15 minuti, 30 minuti, 1 ora, 2 ore).
+  * Voce **"Avvia all'avvio..."** per aprire comodamente le Impostazioni di Sistema sugli Elementi di Login di macOS.
+  * Voce **"Modifica ultima voce..."** nel menu principale per correggere l'ultimo log registrato al volo.
 
 ---
 
