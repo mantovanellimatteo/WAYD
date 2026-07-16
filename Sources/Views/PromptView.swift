@@ -5,6 +5,9 @@ struct PromptView: View {
     @FocusState private var isTextFieldFocused: Bool
     @State private var pastActivities: [String] = []
     
+    // Autocomplete selection state
+    @State private var selectedSuggestionIndex: Int? = nil
+    
     var title: String
     var onSave: (String) -> Void
     var onCancel: () -> Void
@@ -38,27 +41,35 @@ struct PromptView: View {
                     .onSubmit {
                         saveAndClose()
                     }
+                    .onChange(of: activityText) { _ in
+                        // Reset selection when user types or edits text
+                        selectedSuggestionIndex = nil
+                    }
                 
                 // Dynamic autocomplete suggestions
                 if !suggestions.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
-                        ForEach(suggestions, id: \.self) { suggestion in
+                        ForEach(0..<suggestions.count, id: \.self) { index in
+                            let suggestion = suggestions[index]
+                            let isSelected = selectedSuggestionIndex == index
+                            
                             Button(action: {
                                 activityText = suggestion
                             }) {
                                 HStack {
                                     Image(systemName: "arrow.uturn.left")
                                         .font(.caption)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(isSelected ? .accentColor : .secondary)
                                     Text(suggestion)
                                         .font(.system(.subheadline, design: .rounded))
-                                        .foregroundColor(.secondary)
+                                        .fontWeight(isSelected ? .semibold : .regular)
+                                        .foregroundColor(isSelected ? .accentColor : .secondary)
                                         .lineLimit(1)
                                     Spacer()
                                 }
                                 .padding(.vertical, 4)
                                 .padding(.horizontal, 8)
-                                .background(Color.secondary.opacity(0.08))
+                                .background(isSelected ? Color.accentColor.opacity(0.15) : Color.secondary.opacity(0.08))
                                 .cornerRadius(4)
                             }
                             .buttonStyle(.plain)
@@ -66,6 +77,25 @@ struct PromptView: View {
                     }
                     .transition(.opacity)
                 }
+            }
+            
+            // Hidden buttons to capture Arrow Up/Down keyboard events
+            if !suggestions.isEmpty {
+                Button("") {
+                    selectNextSuggestion()
+                }
+                .keyboardShortcut(.downArrow, modifiers: [])
+                .buttonStyle(.plain)
+                .frame(width: 0, height: 0)
+                .opacity(0)
+                
+                Button("") {
+                    selectPreviousSuggestion()
+                }
+                .keyboardShortcut(.upArrow, modifiers: [])
+                .buttonStyle(.plain)
+                .frame(width: 0, height: 0)
+                .opacity(0)
             }
             
             Spacer(minLength: 8)
@@ -113,10 +143,45 @@ struct PromptView: View {
         .map { $0 }
     }
     
+    private func selectNextSuggestion() {
+        guard !suggestions.isEmpty else { return }
+        if let current = selectedSuggestionIndex {
+            if current < suggestions.count - 1 {
+                selectedSuggestionIndex = current + 1
+            }
+        } else {
+            selectedSuggestionIndex = 0
+        }
+    }
+    
+    private func selectPreviousSuggestion() {
+        guard !suggestions.isEmpty else { return }
+        if let current = selectedSuggestionIndex {
+            if current > 0 {
+                selectedSuggestionIndex = current - 1
+            } else {
+                selectedSuggestionIndex = nil
+            }
+        }
+    }
+    
     private func saveAndClose() {
         let trimmed = activityText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty {
-            onSave(trimmed)
+        
+        var finalActivity = trimmed
+        if !suggestions.isEmpty {
+            if let index = selectedSuggestionIndex, index >= 0 && index < suggestions.count {
+                // If a suggestion was explicitly selected via arrow keys
+                finalActivity = suggestions[index]
+            } else if selectedSuggestionIndex == nil {
+                // Default: automatically take the first suggestion on submit if none is selected
+                finalActivity = suggestions[0]
+            }
+        }
+        
+        let finalTrimmed = finalActivity.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !finalTrimmed.isEmpty {
+            onSave(finalTrimmed)
         }
     }
 }
