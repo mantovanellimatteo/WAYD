@@ -44,13 +44,16 @@ struct AutocompleteTextField: NSViewRepresentable {
                     $0.lowercased().hasPrefix(typed.lowercased()) && $0.count > typed.count 
                 }) {
                     isCompleting = true
-                    textField.stringValue = match
-                    parent.text = match
-                    
-                    // Select the autocompleted part
-                    let completedRange = NSRange(location: typed.count, length: match.count - typed.count)
-                    editor.selectedRange = completedRange
-                    isCompleting = false
+                    DispatchQueue.main.async {
+                        textField.stringValue = match
+                        self.parent.text = match
+                        
+                        if let editor = textField.currentEditor() {
+                            let completedRange = NSRange(location: typed.count, length: match.count - typed.count)
+                            editor.selectedRange = completedRange
+                        }
+                        self.isCompleting = false
+                    }
                 }
             }
         }
@@ -204,10 +207,18 @@ struct PromptView: View {
         .padding(20)
         .frame(width: 360, height: 200)
         .onAppear {
-            // Load unique past activities
+            // Load unique past activities in reverse chronological order (most recent first)
             let loaded = LogManager.shared.loadEntries()
-            let uniqueActivities = Array(Set(loaded.map { $0.activity })).sorted()
-            pastActivities = uniqueActivities
+            var unique: [String] = []
+            var seen = Set<String>()
+            for entry in loaded.reversed() {
+                let activity = entry.activity.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !seen.contains(activity) && !activity.isEmpty {
+                    seen.insert(activity)
+                    unique.append(activity)
+                }
+            }
+            pastActivities = unique
         }
     }
     

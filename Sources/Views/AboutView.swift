@@ -11,7 +11,7 @@ struct AboutView: View {
                 Text("WAYD")
                     .font(.system(.title2, design: .rounded))
                     .fontWeight(.bold)
-                Text("Versione 1.5")
+                Text("Versione 1.6")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
