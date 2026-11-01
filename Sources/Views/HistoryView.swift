@@ -187,20 +187,10 @@ class HistoryViewModel: ObservableObject {
         for day in orderedDays {
             guard let dayEntries = groupedDict[day] else { continue }
             
-            // Sort chronologically (oldest to newest) to calculate time deltas
-            let sortedChronological = dayEntries.sorted { a, b in
-                if let da = a.entry.parsedDate, let db = b.entry.parsedDate {
-                    return da < db
-                }
-                return a.originalIndex < b.originalIndex
-            }
-            
-            var activityDurations: [String: TimeInterval] = [:]
             var activityCounts: [String: Int] = [:]
             var displayNames: [String: String] = [:]
-            var dayTotalDuration: TimeInterval = 0
             
-            for (i, item) in sortedChronological.enumerated() {
+            for item in dayEntries {
                 let trimmed = item.entry.activity.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else { continue }
                 let key = trimmed.lowercased()
@@ -209,36 +199,26 @@ class HistoryViewModel: ObservableObject {
                     displayNames[key] = trimmed
                 }
                 
-                let duration: TimeInterval
-                if i > 0,
-                   let prevDate = sortedChronological[i - 1].entry.parsedDate,
-                   let currDate = item.entry.parsedDate {
-                    let delta = currDate.timeIntervalSince(prevDate)
-                    if delta > 0 && delta <= max(standardInterval * 2.5, 7200) {
-                        duration = delta
-                    } else {
-                        duration = standardInterval
-                    }
-                } else {
-                    duration = standardInterval
-                }
-                
-                activityDurations[key, default: 0] += duration
                 activityCounts[key, default: 0] += 1
-                dayTotalDuration += duration
             }
             
-            let summaryItems: [ActivitySummaryItem] = activityDurations.keys.compactMap { key in
-                guard let name = displayNames[key],
-                      let dur = activityDurations[key],
-                      let count = activityCounts[key] else { return nil }
-                return ActivitySummaryItem(
+            var dayTotalDuration: TimeInterval = 0
+            var summaryItems: [ActivitySummaryItem] = []
+            
+            for (key, count) in activityCounts {
+                guard let name = displayNames[key] else { continue }
+                let duration = TimeInterval(count) * standardInterval
+                dayTotalDuration += duration
+                
+                summaryItems.append(ActivitySummaryItem(
                     activity: name,
-                    duration: dur,
+                    duration: duration,
                     count: count,
                     color: ActivityColor.color(for: name)
-                )
-            }.sorted { $0.duration > $1.duration }
+                ))
+            }
+            
+            summaryItems.sort { $0.duration > $1.duration }
             
             groups.append(DayGroup(
                 dateString: day,
