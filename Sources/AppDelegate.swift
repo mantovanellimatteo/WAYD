@@ -6,7 +6,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var timer: Timer?
     
     // Settings state (defaults)
-    var promptInterval: TimeInterval = 1800 // 30 minutes (1800 seconds)
+    var promptInterval: TimeInterval {
+        get {
+            let stored = UserDefaults.standard.double(forKey: "promptInterval")
+            return stored > 0 ? stored : 1800
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "promptInterval")
+        }
+    }
     var promptEnabled: Bool = true
     
     // Windows

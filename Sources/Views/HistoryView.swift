@@ -14,6 +14,48 @@ enum DatePreset: String, CaseIterable, Identifiable {
     var id: String { self.rawValue }
 }
 
+struct ActivitySummaryItem: Identifiable {
+    var id: String { activity }
+    let activity: String
+    let duration: TimeInterval
+    let count: Int
+    let color: Color
+}
+
+struct DayGroup: Identifiable {
+    var id: String { dateString }
+    let dateString: String
+    let entries: [IndexedEntry]
+    let summaryItems: [ActivitySummaryItem]
+    let totalDuration: TimeInterval
+    let totalEntries: Int
+}
+
+struct ActivityColor {
+    static let palette: [Color] = [
+        .blue, .green, .orange, .purple, .teal, .indigo, .pink, .cyan, .mint
+    ]
+    
+    static func color(for activity: String) -> Color {
+        let trimmed = activity.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let hash = abs(trimmed.hashValue)
+        return palette[hash % palette.count]
+    }
+}
+
+func formatDuration(seconds: TimeInterval) -> String {
+    let totalMinutes = max(1, Int(round(seconds / 60)))
+    let hours = totalMinutes / 60
+    let minutes = totalMinutes % 60
+    if hours > 0 && minutes > 0 {
+        return "\(hours)h \(minutes)m"
+    } else if hours > 0 {
+        return "\(hours)h"
+    } else {
+        return "\(minutes)m"
+    }
+}
+
 class HistoryViewModel: ObservableObject {
     @Published var entries: [LogEntry] = []
     @Published var searchText: String = ""
@@ -117,6 +159,184 @@ class HistoryViewModel: ObservableObject {
         // Return reversed (newest first)
         return result.reversed()
     }
+    
+    // Entries grouped by day with computed summary statistics
+    var dayGroups: [DayGroup] {
+        let items = filteredEntriesWithIndex
+        guard !items.isEmpty else { return [] }
+        
+        var groupedDict: [String: [IndexedEntry]] = [:]
+        var orderedDays: [String] = []
+        
+        for item in items {
+            let day = item.entry.date
+            if groupedDict[day] == nil {
+                groupedDict[day] = []
+                orderedDays.append(day)
+            }
+            groupedDict[day]?.append(item)
+        }
+        
+        let standardInterval: TimeInterval = {
+            let stored = UserDefaults.standard.double(forKey: "promptInterval")
+            return stored > 0 ? stored : 1800
+        }()
+        
+        var groups: [DayGroup] = []
+        
+        for day in orderedDays {
+            guard let dayEntries = groupedDict[day] else { continue }
+            
+            // Sort chronologically (oldest to newest) to calculate time deltas
+            let sortedChronological = dayEntries.sorted { a, b in
+                if let da = a.entry.parsedDate, let db = b.entry.parsedDate {
+                    return da < db
+                }
+                return a.originalIndex < b.originalIndex
+            }
+            
+            var activityDurations: [String: TimeInterval] = [:]
+            var activityCounts: [String: Int] = [:]
+            var displayNames: [String: String] = [:]
+            var dayTotalDuration: TimeInterval = 0
+            
+            for (i, item) in sortedChronological.enumerated() {
+                let trimmed = item.entry.activity.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { continue }
+                let key = trimmed.lowercased()
+                
+                if displayNames[key] == nil {
+                    displayNames[key] = trimmed
+                }
+                
+                let duration: TimeInterval
+                if i > 0,
+                   let prevDate = sortedChronological[i - 1].entry.parsedDate,
+                   let currDate = item.entry.parsedDate {
+                    let delta = currDate.timeIntervalSince(prevDate)
+                    if delta > 0 && delta <= max(standardInterval * 2.5, 7200) {
+                        duration = delta
+                    } else {
+                        duration = standardInterval
+                    }
+                } else {
+                    duration = standardInterval
+                }
+                
+                activityDurations[key, default: 0] += duration
+                activityCounts[key, default: 0] += 1
+                dayTotalDuration += duration
+            }
+            
+            let summaryItems: [ActivitySummaryItem] = activityDurations.keys.compactMap { key in
+                guard let name = displayNames[key],
+                      let dur = activityDurations[key],
+                      let count = activityCounts[key] else { return nil }
+                return ActivitySummaryItem(
+                    activity: name,
+                    duration: dur,
+                    count: count,
+                    color: ActivityColor.color(for: name)
+                )
+            }.sorted { $0.duration > $1.duration }
+            
+            groups.append(DayGroup(
+                dateString: day,
+                entries: dayEntries,
+                summaryItems: summaryItems,
+                totalDuration: dayTotalDuration,
+                totalEntries: dayEntries.count
+            ))
+        }
+        
+        return groups
+    }
+}
+
+struct DaySummaryCard: View {
+    let group: DayGroup
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header of the card
+            HStack(alignment: .center) {
+                Label {
+                    Text("Riepilogo giornaliero")
+                        .font(.system(.subheadline, design: .rounded))
+                        .fontWeight(.bold)
+                } icon: {
+                    Image(systemName: "chart.bar.xaxis")
+                        .foregroundColor(.accentColor)
+                }
+                
+                Spacer()
+                
+                HStack(spacing: 5) {
+                    Image(systemName: "clock.fill")
+                        .font(.system(size: 10))
+                    Text("Totale: \(formatDuration(seconds: group.totalDuration))")
+                        .font(.system(.caption, design: .rounded))
+                        .fontWeight(.bold)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.accentColor.opacity(0.12))
+                .foregroundColor(.accentColor)
+                .cornerRadius(6)
+            }
+            
+            // Highlighted rows for each activity
+            VStack(spacing: 5) {
+                ForEach(group.summaryItems) { item in
+                    HStack(spacing: 8) {
+                        // Colored vertical accent bar
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(item.color)
+                            .frame(width: 4, height: 22)
+                        
+                        // Activity Name
+                        Text(item.activity)
+                            .font(.system(.body, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
+                        
+                        Spacer()
+                        
+                        // Count badge
+                        Text("\(item.count) \(item.count == 1 ? "voce" : "voci")")
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundColor(.secondary)
+                        
+                        // Highlighted duration pill
+                        Text(formatDuration(seconds: item.duration))
+                            .font(.system(.subheadline, design: .rounded))
+                            .fontWeight(.bold)
+                            .foregroundColor(item.color)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(item.color.opacity(0.18))
+                            .cornerRadius(6)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(item.color.opacity(0.08)) // Clearly highlighted row
+                    .cornerRadius(7)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7)
+                            .stroke(item.color.opacity(0.28), lineWidth: 1)
+                    )
+                }
+            }
+        }
+        .padding(12)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.7))
+        .cornerRadius(10)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.secondary.opacity(0.18), lineWidth: 1)
+        )
+    }
 }
 
 struct HistoryView: View {
@@ -180,8 +400,8 @@ struct HistoryView: View {
             
             Divider()
             
-            // List of entries
-            if vm.filteredEntriesWithIndex.isEmpty {
+            // List of entries grouped by day
+            if vm.dayGroups.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "clock.badge.exclamationmark")
                         .font(.system(size: 32))
@@ -193,50 +413,74 @@ struct HistoryView: View {
                 .background(Color(NSColor.controlBackgroundColor))
             } else {
                 List {
-                    ForEach(vm.filteredEntriesWithIndex, id: \.entry.id) { item in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(item.entry.activity)
-                                    .font(.system(.body, design: .rounded))
-                                    .fontWeight(.medium)
-                                    .foregroundColor(.primary)
-                                HStack(spacing: 8) {
-                                    Text(item.entry.date)
-                                    Text("•")
-                                    Text(item.entry.time)
-                                }
-                                .font(.system(.caption))
-                                .foregroundColor(.secondary)
-                            }
-                            Spacer()
+                    ForEach(vm.dayGroups) { group in
+                        Section {
+                            // Highlighted summary card at the start of each day
+                            DaySummaryCard(group: group)
+                                .listRowInsets(EdgeInsets(top: 8, leading: 10, bottom: 8, trailing: 10))
+                                .listRowSeparator(.hidden)
                             
-                            HStack(spacing: 8) {
-                                Button(action: {
-                                    vm.startEditing(entry: item.entry, index: item.originalIndex)
-                                }) {
-                                    Image(systemName: "pencil")
-                                        .foregroundColor(.accentColor)
+                            // Individual log entries for this day
+                            ForEach(group.entries, id: \.entry.id) { item in
+                                HStack(spacing: 10) {
+                                    Circle()
+                                        .fill(ActivityColor.color(for: item.entry.activity))
+                                        .frame(width: 8, height: 8)
+                                    
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(item.entry.activity)
+                                            .font(.system(.body, design: .rounded))
+                                            .fontWeight(.medium)
+                                            .foregroundColor(.primary)
+                                        HStack(spacing: 8) {
+                                            Text(item.entry.time)
+                                            Text("•")
+                                            Text(item.entry.date)
+                                        }
+                                        .font(.system(.caption, design: .rounded))
+                                        .foregroundColor(.secondary)
+                                    }
+                                    Spacer()
+                                    
+                                    HStack(spacing: 8) {
+                                        Button(action: {
+                                            vm.startEditing(entry: item.entry, index: item.originalIndex)
+                                        }) {
+                                            Image(systemName: "pencil")
+                                                .foregroundColor(.accentColor)
+                                        }
+                                        .buttonStyle(.borderless)
+                                        .help("Modifica questa attività")
+                                        
+                                        Button(action: {
+                                            vm.deleteEntry(at: item.originalIndex)
+                                        }) {
+                                            Image(systemName: "trash")
+                                                .foregroundColor(.red)
+                                        }
+                                        .buttonStyle(.borderless)
+                                        .help("Elimina questa attività")
+                                    }
                                 }
-                                .buttonStyle(.borderless)
-                                .help("Modifica questa attività")
-                                
-                                Button(action: {
-                                    vm.deleteEntry(at: item.originalIndex)
-                                }) {
-                                    Image(systemName: "trash")
-                                        .foregroundColor(.red)
-                                }
-                                .buttonStyle(.borderless)
-                                .help("Elimina questa attività")
+                                .padding(.vertical, 3)
                             }
+                        } header: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "calendar")
+                                    .foregroundColor(.accentColor)
+                                Text(group.dateString)
+                                    .font(.system(.headline, design: .rounded))
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.primary)
+                            }
+                            .padding(.vertical, 4)
                         }
-                        .padding(.vertical, 4)
                     }
                 }
-                .listStyle(.sidebar)
+                .listStyle(.inset)
             }
         }
-        .frame(minWidth: 600, minHeight: 450)
+        .frame(minWidth: 620, minHeight: 480)
         .onAppear(perform: vm.refreshData)
         .sheet(isPresented: $vm.isEditing) {
             PromptView(
