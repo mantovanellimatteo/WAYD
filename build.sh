@@ -3,6 +3,9 @@
 # Exit immediately if a command exits with a non-zero status
 set -e
 
+# Make sure we are in the project root directory where this script is located
+cd "$(dirname "$0")"
+
 echo "🔨 Building WAYD native macOS Menu Bar App..."
 
 # Check if Xcode Command Line Tools are installed (check if swiftc exists)

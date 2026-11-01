@@ -101,12 +101,75 @@ struct AutocompleteTextField: NSViewRepresentable {
     }
 }
 
-struct PromptView: View {
-    @State private var activityText: String
-    @State private var pastActivities: [String] = []
+class PromptViewModel: ObservableObject {
+    @Published var activityText: String = ""
+    @Published var pastActivities: [String] = []
+    @Published var selectedSuggestionIndex: Int? = nil
     
-    // Autocomplete selection state
-    @State private var selectedSuggestionIndex: Int? = nil
+    init(initialText: String = "") {
+        self.activityText = initialText
+    }
+    
+    func loadPastActivities() {
+        let loaded = LogManager.shared.loadEntries()
+        var unique: [String] = []
+        var seen = Set<String>()
+        for entry in loaded.reversed() {
+            let activity = entry.activity.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !seen.contains(activity) && !activity.isEmpty {
+                seen.insert(activity)
+                unique.append(activity)
+            }
+        }
+        self.pastActivities = unique
+    }
+    
+    var suggestions: [String] {
+        let trimmed = activityText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        
+        return pastActivities.filter { activity in
+            let actLower = activity.lowercased()
+            return actLower.hasPrefix(trimmed) && actLower != trimmed
+        }
+        .prefix(3)
+        .map { $0 }
+    }
+    
+    func selectNextSuggestion() {
+        let currentSuggestions = suggestions
+        guard !currentSuggestions.isEmpty else { return }
+        let nextIndex: Int
+        if let current = selectedSuggestionIndex {
+            if current < currentSuggestions.count - 1 {
+                nextIndex = current + 1
+            } else {
+                nextIndex = current
+            }
+        } else {
+            nextIndex = 0
+        }
+        selectedSuggestionIndex = nextIndex
+        activityText = currentSuggestions[nextIndex]
+    }
+    
+    func selectPreviousSuggestion() {
+        let currentSuggestions = suggestions
+        guard !currentSuggestions.isEmpty else { return }
+        if let current = selectedSuggestionIndex {
+            if current > 0 {
+                let prevIndex = current - 1
+                selectedSuggestionIndex = prevIndex
+                activityText = currentSuggestions[prevIndex]
+            } else {
+                selectedSuggestionIndex = nil
+            }
+        }
+    }
+}
+
+struct PromptView: View {
+    @StateObject private var vm: PromptViewModel
     
     var title: String
     var onSave: (String) -> Void
@@ -114,7 +177,7 @@ struct PromptView: View {
     
     init(title: String = "Cosa stai facendo?", initialText: String = "", onSave: @escaping (String) -> Void, onCancel: @escaping () -> Void) {
         self.title = title
-        self._activityText = State(initialValue: initialText)
+        self._vm = StateObject(wrappedValue: PromptViewModel(initialText: initialText))
         self.onSave = onSave
         self.onCancel = onCancel
     }
@@ -130,18 +193,18 @@ struct PromptView: View {
             VStack(alignment: .leading, spacing: 6) {
                 // Using our native AppKit text field with autocomplete
                 AutocompleteTextField(
-                    text: $activityText,
-                    selectedIndex: $selectedSuggestionIndex,
+                    text: $vm.activityText,
+                    selectedIndex: $vm.selectedSuggestionIndex,
                     placeholder: "Sto lavorando a...",
                     onCommit: {
                         saveAndClose()
                     },
-                    suggestions: pastActivities,
+                    suggestions: vm.pastActivities,
                     onMoveDown: {
-                        selectNextSuggestion()
+                        vm.selectNextSuggestion()
                     },
                     onMoveUp: {
-                        selectPreviousSuggestion()
+                        vm.selectPreviousSuggestion()
                     }
                 )
                 .frame(height: 22)
@@ -154,14 +217,14 @@ struct PromptView: View {
                 )
                 
                 // Dynamic autocomplete suggestions
-                if !suggestions.isEmpty {
+                if !vm.suggestions.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
-                        ForEach(0..<suggestions.count, id: \.self) { index in
-                            let suggestion = suggestions[index]
-                            let isSelected = selectedSuggestionIndex == index
+                        ForEach(0..<vm.suggestions.count, id: \.self) { index in
+                            let suggestion = vm.suggestions[index]
+                            let isSelected = vm.selectedSuggestionIndex == index
                             
                             Button(action: {
-                                activityText = suggestion
+                                vm.activityText = suggestion
                             }) {
                                 HStack {
                                     Image(systemName: "arrow.uturn.left")
@@ -201,81 +264,26 @@ struct PromptView: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
-                .disabled(activityText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(vm.activityText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .padding(20)
         .frame(width: 360, height: 200)
         .onAppear {
-            // Load unique past activities in reverse chronological order (most recent first)
-            let loaded = LogManager.shared.loadEntries()
-            var unique: [String] = []
-            var seen = Set<String>()
-            for entry in loaded.reversed() {
-                let activity = entry.activity.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !seen.contains(activity) && !activity.isEmpty {
-                    seen.insert(activity)
-                    unique.append(activity)
-                }
-            }
-            pastActivities = unique
-        }
-    }
-    
-    private var suggestions: [String] {
-        let trimmed = activityText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return [] }
-        
-        return pastActivities.filter { activity in
-            let actLower = activity.lowercased()
-            // Make sure it doesn't match the exact text, otherwise no suggestion needed
-            return actLower.hasPrefix(trimmed) && actLower != trimmed
-        }
-        .prefix(3)
-        .map { $0 }
-    }
-    
-    private func selectNextSuggestion() {
-        guard !suggestions.isEmpty else { return }
-        let nextIndex: Int
-        if let current = selectedSuggestionIndex {
-            if current < suggestions.count - 1 {
-                nextIndex = current + 1
-            } else {
-                nextIndex = current
-            }
-        } else {
-            nextIndex = 0
-        }
-        selectedSuggestionIndex = nextIndex
-        activityText = suggestions[nextIndex]
-    }
-    
-    private func selectPreviousSuggestion() {
-        guard !suggestions.isEmpty else { return }
-        if let current = selectedSuggestionIndex {
-            if current > 0 {
-                let prevIndex = current - 1
-                selectedSuggestionIndex = prevIndex
-                activityText = suggestions[prevIndex]
-            } else {
-                selectedSuggestionIndex = nil
-                // Optionally reset to what the user typed before?
-                // But keeping current is fine.
-            }
+            vm.loadPastActivities()
         }
     }
     
     private func saveAndClose() {
-        let trimmed = activityText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = vm.activityText.trimmingCharacters(in: .whitespacesAndNewlines)
         
         var finalActivity = trimmed
-        if !suggestions.isEmpty {
-            if let index = selectedSuggestionIndex, index >= 0 && index < suggestions.count {
-                finalActivity = suggestions[index]
-            } else if selectedSuggestionIndex == nil {
+        if !vm.suggestions.isEmpty {
+            if let index = vm.selectedSuggestionIndex, index >= 0 && index < vm.suggestions.count {
+                finalActivity = vm.suggestions[index]
+            } else if vm.selectedSuggestionIndex == nil {
                 // If there's an exact suggestion matching prefix, let's use it
-                finalActivity = suggestions[0]
+                finalActivity = vm.suggestions[0]
             }
         }
         
