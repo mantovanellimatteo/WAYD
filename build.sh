@@ -43,6 +43,7 @@ SOURCES=(
     "Sources/Views/PromptView.swift"
     "Sources/Views/HistoryView.swift"
     "Sources/Views/AboutView.swift"
+    "Sources/Views/SettingsView.swift"
 )
 
 # Find macOS SDK path

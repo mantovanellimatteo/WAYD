@@ -24,11 +24,16 @@ L'applicazione salva tutto lo storico delle tue risposte in un semplice file CSV
 * **Prompt di Inserimento Nativo**: Una finestra popup SwiftUI pulita ed elegante che appare in primo piano per chiederti cosa stai facendo.
   * **Autocompletamento in linea (Type-Ahead)**: Man mano che scrivi nel campo, l'app autocompleta il testo suggerendo l'attività passata più rilevante ed evidenziando la parte completata.
   * **Navigazione da tastiera avanzata**: Scorri i suggerimenti visualizzati sotto il campo usando le frecce ⬆️/⬇️ con evidenziazione visiva azzurra. Premendo `Invio`, l'app auto-completa e salva direttamente il primo suggerimento (o quello correntemente selezionato).
-* **Registro Log Completo**:
-  * Visualizzazione di tutta la cronologia.
+* **Registro Log Completo con Riepilogo Giornaliero**:
+  * **Riepilogo giornaliero a inizio giorno**: Box riassuntivo colorato con tempo totale della giornata e ripartizione per attività con badge grafici ed evidenziazione a colori.
+  * Visualizzazione di tutta la cronologia raggruppata per data.
   * **Ricerca libera** (filtro testuale case-insensitive).
   * **Filtro per data ad intervallo**: Possibilità di filtrare i log inserendo un range preciso di date o selezionando preset rapidi ("Questa settimana", "Questo mese", "Mese scorso").
   * Possibilità di **modificare** o **eliminare** qualsiasi attività passata direttamente dall'interfaccia.
+* **Orario di Lavoro & Straordinario Serale**:
+  * **Orario lavorativo personalizzabile**: Imposta l'orario di attività (es. 09:00 – 18:00, giorni feriali o tutti i giorni). Fuori orario l'app va in pausa automatica con icona luna 🌙.
+  * **Modalità Straordinario (Overtime temporaneo)**: Se lavori la sera, puoi riattivare il monitoraggio per 1 ora, 2 ore o fino a mezzanotte direttamente dal menu.
+  * **Nuova finestra Impostazioni (`⌘,`)**: Gestione comoda dell'orario lavorativo, dei giorni attivi e della frequenza dei prompt.
 * **Configurazione e Timer**:
   * Possibilità di attivare/disattivare il prompt in qualsiasi momento dal menu.
   * Regolazione della frequenza del prompt (15 minuti, 30 minuti, 1 ora, 2 ore).

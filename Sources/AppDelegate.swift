@@ -4,6 +4,7 @@ import SwiftUI
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem!
     var timer: Timer?
+    var minuteTimer: Timer?
     
     // Settings state (defaults)
     var promptInterval: TimeInterval {
@@ -17,10 +18,106 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     var promptEnabled: Bool = true
     
+    var workHoursEnabled: Bool {
+        get {
+            if UserDefaults.standard.object(forKey: "workHoursEnabled") == nil { return true }
+            return UserDefaults.standard.bool(forKey: "workHoursEnabled")
+        }
+        set { UserDefaults.standard.set(newValue, forKey: "workHoursEnabled") }
+    }
+    
+    var workDaysOption: String {
+        get { UserDefaults.standard.string(forKey: "workDaysOption") ?? "weekdays" }
+        set { UserDefaults.standard.set(newValue, forKey: "workDaysOption") }
+    }
+    
+    var workStartHour: Int {
+        get {
+            if UserDefaults.standard.object(forKey: "workStartHour") == nil { return 9 }
+            return UserDefaults.standard.integer(forKey: "workStartHour")
+        }
+        set { UserDefaults.standard.set(newValue, forKey: "workStartHour") }
+    }
+    
+    var workStartMinute: Int {
+        get { UserDefaults.standard.integer(forKey: "workStartMinute") }
+        set { UserDefaults.standard.set(newValue, forKey: "workStartMinute") }
+    }
+    
+    var workEndHour: Int {
+        get {
+            if UserDefaults.standard.object(forKey: "workEndHour") == nil { return 18 }
+            return UserDefaults.standard.integer(forKey: "workEndHour")
+        }
+        set { UserDefaults.standard.set(newValue, forKey: "workEndHour") }
+    }
+    
+    var workEndMinute: Int {
+        get { UserDefaults.standard.integer(forKey: "workEndMinute") }
+        set { UserDefaults.standard.set(newValue, forKey: "workEndMinute") }
+    }
+    
+    var overtimeUntil: Date? {
+        get {
+            let ts = UserDefaults.standard.double(forKey: "overtimeUntil")
+            return ts > 0 ? Date(timeIntervalSince1970: ts) : nil
+        }
+        set {
+            if let date = newValue {
+                UserDefaults.standard.set(date.timeIntervalSince1970, forKey: "overtimeUntil")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "overtimeUntil")
+            }
+        }
+    }
+    
+    var isOvertimeActive: Bool {
+        guard let until = overtimeUntil else { return false }
+        if Date() < until {
+            return true
+        } else {
+            overtimeUntil = nil
+            return false
+        }
+    }
+    
+    func isWithinWorkingHours() -> Bool {
+        guard workHoursEnabled else { return true }
+        
+        let now = Date()
+        let calendar = Calendar.current
+        
+        if workDaysOption == "weekdays" {
+            let weekday = calendar.component(.weekday, from: now)
+            // 1 = Sunday, 7 = Saturday
+            if weekday == 1 || weekday == 7 {
+                return false
+            }
+        }
+        
+        let currentMinutes = calendar.component(.hour, from: now) * 60 + calendar.component(.minute, from: now)
+        let startMinutes = workStartHour * 60 + workStartMinute
+        let endMinutes = workEndHour * 60 + workEndMinute
+        
+        if startMinutes <= endMinutes {
+            return currentMinutes >= startMinutes && currentMinutes < endMinutes
+        } else {
+            return currentMinutes >= startMinutes || currentMinutes < endMinutes
+        }
+    }
+    
+    func isActivityAllowed() -> Bool {
+        if isOvertimeActive {
+            return true
+        }
+        return isWithinWorkingHours()
+    }
+    
     // Windows
     var promptWindow: NSWindow?
     var historyWindow: NSWindow?
     var aboutWindow: NSWindow?
+    var settingsWindow: NSWindow?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Create Status Item
@@ -36,14 +133,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Start Timer
         startTimer()
+        startMinuteCheck()
         
         // Listen for changes
         NotificationCenter.default.addObserver(self, selector: #selector(lastEntryChanged), name: Notification.Name("LastEntryChanged"), object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(settingsChanged), name: Notification.Name("SettingsChanged"), object: nil)
         
-        // Prompt immediately on launch after a small delay
+        // Prompt immediately on launch after a small delay only if in activity time
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            if self?.promptEnabled == true {
-                self?.showPromptWindow(isCorrection: false)
+            guard let self = self else { return }
+            if self.promptEnabled && self.isActivityAllowed() {
+                self.showPromptWindow(isCorrection: false)
             }
         }
     }
@@ -51,6 +151,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func lastEntryChanged() {
         updateStatusBarTitle()
         buildMenu() // Rebuild menu to update the "Ultimo log" label
+    }
+    
+    @objc func settingsChanged() {
+        startTimer()
+        updateStatusBarImage()
+        updateStatusBarTitle()
+        buildMenu()
     }
     
     func updateStatusBarTitle() {
@@ -67,17 +174,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     func updateStatusBarImage() {
         guard let button = statusItem.button else { return }
-        let symbolName = promptEnabled ? "clock" : "clock.slash"
-        if let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "WAYD") {
-            image.isTemplate = true
-            button.image = image
-        } else if let image = NSImage(systemSymbolName: "clock", accessibilityDescription: "WAYD") {
-            image.isTemplate = true
-            button.image = image
-        }
         
-        // Gray out the menu bar item when disabled to make it visually obvious
-        button.alphaValue = promptEnabled ? 1.0 : 0.4
+        if !promptEnabled {
+            if let image = NSImage(systemSymbolName: "clock", accessibilityDescription: "WAYD (Disattivato)") {
+                image.isTemplate = true
+                button.image = image
+            }
+            button.alphaValue = 0.35
+        } else if isOvertimeActive {
+            if let image = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "WAYD (Straordinario)") {
+                image.isTemplate = true
+                button.image = image
+            }
+            button.alphaValue = 1.0
+        } else if !isWithinWorkingHours() {
+            if let image = NSImage(systemSymbolName: "moon.fill", accessibilityDescription: "WAYD (Fuori orario)") {
+                image.isTemplate = true
+                button.image = image
+            }
+            button.alphaValue = 0.55
+        } else {
+            if let image = NSImage(systemSymbolName: "clock", accessibilityDescription: "WAYD") {
+                image.isTemplate = true
+                button.image = image
+            }
+            button.alphaValue = 1.0
+        }
     }
     
     func buildMenu() {
@@ -106,6 +228,52 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         menu.addItem(NSMenuItem.separator())
         
+        // Status & Overtime Section
+        if !promptEnabled {
+            let disabledItem = NSMenuItem(title: "⚠️ Prompt disattivato manualmente", action: nil, keyEquivalent: "")
+            disabledItem.isEnabled = false
+            menu.addItem(disabledItem)
+        } else if isOvertimeActive {
+            let df = DateFormatter()
+            df.dateFormat = "HH:mm"
+            let untilStr = overtimeUntil != nil ? df.string(from: overtimeUntil!) : ""
+            let otItem = NSMenuItem(title: "⚡ Straordinario attivo (fino alle \(untilStr))", action: nil, keyEquivalent: "")
+            otItem.isEnabled = false
+            menu.addItem(otItem)
+            
+            let stopOtItem = NSMenuItem(title: "Termina straordinario", action: #selector(stopOvertimeClicked), keyEquivalent: "")
+            stopOtItem.target = self
+            menu.addItem(stopOtItem)
+        } else if !isWithinWorkingHours() {
+            let restItem = NSMenuItem(title: "🌙 Fuori orario lavorativo (In pausa)", action: nil, keyEquivalent: "")
+            restItem.isEnabled = false
+            menu.addItem(restItem)
+            
+            let overtimeMenu = NSMenu()
+            
+            let item1h = NSMenuItem(title: "Attiva per 1 ora", action: #selector(overtime1HourClicked), keyEquivalent: "")
+            item1h.target = self
+            overtimeMenu.addItem(item1h)
+            
+            let item2h = NSMenuItem(title: "Attiva per 2 ore", action: #selector(overtime2HoursClicked), keyEquivalent: "")
+            item2h.target = self
+            overtimeMenu.addItem(item2h)
+            
+            let itemMidnight = NSMenuItem(title: "Attiva per questa sera (fino a mezzanotte)", action: #selector(overtimeMidnightClicked), keyEquivalent: "")
+            itemMidnight.target = self
+            overtimeMenu.addItem(itemMidnight)
+            
+            let resumeSubmenu = NSMenuItem(title: "Riprendi temporaneamente...", action: nil, keyEquivalent: "")
+            resumeSubmenu.submenu = overtimeMenu
+            menu.addItem(resumeSubmenu)
+        } else {
+            let activeItem = NSMenuItem(title: "🟢 In orario lavorativo (Attivo)", action: nil, keyEquivalent: "")
+            activeItem.isEnabled = false
+            menu.addItem(activeItem)
+        }
+        
+        menu.addItem(NSMenuItem.separator())
+        
         // Enable/Disable Prompt
         let togglePromptItem = NSMenuItem(title: "Prompt attivo", action: #selector(togglePromptClicked), keyEquivalent: "")
         togglePromptItem.target = self
@@ -131,6 +299,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let freqSubmenuItem = NSMenuItem(title: "Frequenza prompt", action: nil, keyEquivalent: "")
         freqSubmenuItem.submenu = freqMenu
         menu.addItem(freqSubmenuItem)
+        
+        let settingsItem = NSMenuItem(title: "Impostazioni orario di lavoro...", action: #selector(settingsClicked), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
         
         let startupItem = NSMenuItem(title: "Avvia all'avvio...", action: #selector(launchAtStartupClicked), keyEquivalent: "")
         startupItem.target = self
@@ -167,6 +339,55 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         showHistoryWindow()
     }
     
+    @objc func settingsClicked() {
+        showSettingsWindow()
+    }
+    
+    @objc func overtime1HourClicked() {
+        startOvertime(hours: 1.0)
+    }
+    
+    @objc func overtime2HoursClicked() {
+        startOvertime(hours: 2.0)
+    }
+    
+    @objc func overtimeMidnightClicked() {
+        startOvertimeUntilMidnight()
+    }
+    
+    @objc func stopOvertimeClicked() {
+        cancelOvertime()
+    }
+    
+    func startOvertime(hours: Double) {
+        overtimeUntil = Date().addingTimeInterval(hours * 3600)
+        updateStatusBarImage()
+        updateStatusBarTitle()
+        buildMenu()
+        showPromptWindow(isCorrection: false)
+    }
+    
+    func startOvertimeUntilMidnight() {
+        let calendar = Calendar.current
+        if let tomorrow = calendar.date(byAdding: .day, value: 1, to: Date()),
+           let midnight = calendar.date(bySettingHour: 0, minute: 0, second: 0, of: tomorrow) {
+            overtimeUntil = midnight
+        } else {
+            overtimeUntil = Date().addingTimeInterval(4 * 3600)
+        }
+        updateStatusBarImage()
+        updateStatusBarTitle()
+        buildMenu()
+        showPromptWindow(isCorrection: false)
+    }
+    
+    func cancelOvertime() {
+        overtimeUntil = nil
+        updateStatusBarImage()
+        updateStatusBarTitle()
+        buildMenu()
+    }
+    
     @objc func togglePromptClicked() {
         promptEnabled.toggle()
         buildMenu()
@@ -200,8 +421,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func startTimer() {
         stopTimer()
         timer = Timer.scheduledTimer(withTimeInterval: promptInterval, repeats: true) { [weak self] _ in
-            if self?.promptEnabled == true {
-                self?.showPromptWindow(isCorrection: false)
+            guard let self = self else { return }
+            _ = self.isOvertimeActive
+            self.updateStatusBarImage()
+            self.buildMenu()
+            
+            if self.promptEnabled && self.isActivityAllowed() {
+                self.showPromptWindow(isCorrection: false)
             }
         }
     }
@@ -209,6 +435,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func stopTimer() {
         timer?.invalidate()
         timer = nil
+    }
+    
+    func startMinuteCheck() {
+        minuteTimer?.invalidate()
+        minuteTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            _ = self.isOvertimeActive
+            self.updateStatusBarImage()
+            self.buildMenu()
+        }
     }
     
     // Windows Management
@@ -297,7 +533,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let contentView = HistoryView()
         
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 550, height: 450),
+            contentRect: NSRect(x: 0, y: 0, width: 620, height: 480),
             styleMask: [.titled, .closable, .resizable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -313,6 +549,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         self.historyWindow = window
+        window.makeKeyAndOrderFront(nil)
+    }
+    
+    func showSettingsWindow() {
+        NSApp.activate(ignoringOtherApps: true)
+        
+        if settingsWindow != nil {
+            settingsWindow?.makeKeyAndOrderFront(nil)
+            return
+        }
+        
+        let contentView = SettingsView()
+        
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 450, height: 400),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.center()
+        window.title = "Impostazioni"
+        window.contentView = NSHostingView(rootView: contentView)
+        window.isReleasedWhenClosed = false
+        
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: nil) { [weak self] _ in
+            self?.settingsWindow = nil
+        }
+        
+        self.settingsWindow = window
         window.makeKeyAndOrderFront(nil)
     }
     
@@ -345,3 +610,4 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil)
     }
 }
+
