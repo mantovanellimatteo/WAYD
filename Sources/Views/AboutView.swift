@@ -3,15 +3,18 @@ import SwiftUI
 struct AboutView: View {
     var body: some View {
         VStack(spacing: 16) {
-            Image(systemName: "clock.circle.fill")
-                .font(.system(size: 48))
-                .foregroundColor(.accentColor)
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 64, height: 64)
+                .cornerRadius(14)
+                .shadow(color: Color.black.opacity(0.15), radius: 4, x: 0, y: 2)
             
             VStack(spacing: 4) {
                 Text("WAYD")
                     .font(.system(.title2, design: .rounded))
                     .fontWeight(.bold)
-                Text("Versione 1.6")
+                Text("Versione 2.0")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
