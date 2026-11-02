@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="Resources/AppIcon.png" width="140" alt="WAYD App Icon"/>
+</p>
+
 # WAYD (What Are You Doing) - macOS
 
 WAYD è un'applicazione nativa per macOS che vive nella barra dei menu e ti aiuta a monitorare la tua produttività chiedendoti periodicamente *"Cosa stai facendo?"*.
@@ -9,11 +13,9 @@ L'applicazione salva tutto lo storico delle tue risposte in un semplice file CSV
 ## 📸 Schermate
 
 <p align="center">
-  <img src="Screenshot/Screenshot%202026-07-15%20alle%2022.19.24.png" width="400" alt="Menu Barra di Stato"/>
-  <img src="Screenshot/Screenshot%202026-07-15%20alle%2022.21.23.png" width="400" alt="Visualizzatore Log con Filtri"/>
-</p>
-<p align="center">
-  <img src="Screenshot/Screenshot%202026-07-15%20alle%2022.19.54.png" width="300" alt="Informazioni App"/>
+  <img src="Screenshot/menu_bar_status.png" width="360" alt="Menu Barra di Stato e Orario Lavorativo"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="Screenshot/daily_summary_log.png" width="480" alt="Registro Attività con Riepilogo Giornaliero a Colori"/>
 </p>
 
 ---
